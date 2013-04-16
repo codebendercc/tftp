@@ -1,9 +1,12 @@
+#ifndef TFTP_PACKET_CPP
+#define TFTP_PACKET_CPP
+
 #include "tftp_packet.h"
 #include "tftp_client.h"
 
 using namespace std;
 
-TFTPClient::TFTPClient(char* ip, int port) {
+template<class Caller_P>TFTPClient<Caller_P>::TFTPClient(const char* ip, int port) {
 
     TFTP_Packet packet;
 
@@ -36,7 +39,41 @@ TFTPClient::TFTPClient(char* ip, int port) {
 
 }
 
-int TFTPClient::connectToServer(int port) {
+template<class Caller_P>TFTPClient<Caller_P>::TFTPClient(const char* ip, int port, Caller* caller) {
+
+    TFTP_Packet packet;
+
+    server_ip = ip;
+    server_port = port;
+
+    //- standartines reiksmes
+
+    socket_descriptor = -1;
+    caller_ = caller;
+
+    //- wsa
+
+#if defined _WIN32 || _WIN64
+
+    /* edited */
+
+    WSADATA wsaData;
+
+    WORD wVersionRequested = MAKEWORD(2, 2);
+
+    int err = WSAStartup(wVersionRequested, &wsaData);
+
+    if (err != 0) {
+
+        throw new ETFTPSocketInitialize;
+
+    }
+
+#endif
+
+}
+
+template<class Caller_P> int TFTPClient<Caller_P>::connectToServer(int port) {
 
     socket_descriptor = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -58,8 +95,6 @@ int TFTPClient::connectToServer(int port) {
     connection = connect(socket_descriptor, (const struct sockaddr *) &client_address, sizeof (client_address));
 
     if (connection != 0) {
-
-        //	cout << "Unable to connect to an address\n";
         return -1;
 
     }
@@ -69,19 +104,19 @@ int TFTPClient::connectToServer(int port) {
 
 }
 
-int TFTPClient::sendBuffer(char *buffer) {
+template<class Caller_P> int TFTPClient<Caller_P>::sendBuffer(char *buffer) {
 
     return send(socket_descriptor, buffer, (int) strlen(buffer), 0);
 
 }
 
-int TFTPClient::sendPacket(TFTP_Packet* packet) {
+template<class Caller_P> int TFTPClient<Caller_P>::sendPacket(TFTP_Packet* packet) {
 
     return send(socket_descriptor, (char*) packet->getData(), packet->getSize(), 0);
 
 }
 
-bool TFTPClient::getFile(char* filename, char* destination) {
+template<class Caller_P> bool TFTPClient<Caller_P>::getFile(char* filename, char* destination) {
 
     TFTP_Packet packet_rrq, packet_ack;
     ofstream file(destination, ifstream::binary);
@@ -120,8 +155,6 @@ bool TFTPClient::getFile(char* filename, char* destination) {
 
             } else {
 
-                //		cout << "Connection timeout" << endl;
-
                 file.close();
 
                 return false;
@@ -138,8 +171,6 @@ bool TFTPClient::getFile(char* filename, char* destination) {
                In this case, an error packet is sent to the originating host. */
 
             /* Taip negali nutikti, nes pas mus naudojamas ACK Lock`as */
-
-            //	    cout << "This should not happen!" << endl; //- aisku kada kadanors tai vis tiek atsitiks :)
 
         } else {
 
@@ -199,7 +230,7 @@ bool TFTPClient::getFile(char* filename, char* destination) {
 
 }
 
-int TFTPClient::waitForPacket(TFTP_Packet* packet, int timeout_ms) {
+template<class Caller_P> int TFTPClient<Caller_P>::waitForPacket(TFTP_Packet* packet, int timeout_ms) {
 
     packet->clear();
 
@@ -216,12 +247,6 @@ int TFTPClient::waitForPacket(TFTP_Packet* packet, int timeout_ms) {
     int select_ready = select(socket_descriptor + 1, &fd_reader, NULL, NULL, &connection_timer);
 
     if (select_ready == -1) {
-
-#if defined _WIN32 || _WIN64
-        //	cout << "Error in select(), no: " << WSAGetLastError() << endl;
-#else
-        //	cout << "Error in select(): " << endl;
-#endif
 
         return TFTP_CLIENT_ERROR_SELECT;
 
@@ -242,7 +267,6 @@ int TFTPClient::waitForPacket(TFTP_Packet* packet, int timeout_ms) {
     connectToServer(port);
 
     if (receive_status == 0) {
-        //	cout << "Connection was closed by server\n";
         return TFTP_CLIENT_ERROR_CONNECTION_CLOSED;
     }
 
@@ -258,14 +282,12 @@ int TFTPClient::waitForPacket(TFTP_Packet* packet, int timeout_ms) {
 
 }
 
-bool TFTPClient::waitForPacketACK(int packet_number, int timeout_ms) {
+template<class Caller_P> bool TFTPClient<Caller_P>::waitForPacketACK(int packet_number, int timeout_ms) {
     TFTP_Packet received_packet;
 
     if (waitForPacket(&received_packet, timeout_ms)) {
 
         if (received_packet.isError()) {
-
-            //	    cout << "ACK expected, but got Error" << endl;
 
             errorReceived(&received_packet);
 
@@ -281,32 +303,14 @@ bool TFTPClient::waitForPacketACK(int packet_number, int timeout_ms) {
         }
 
         if (received_packet.isData()) {
-
-            //	    cout << "DATAK for packet " << received_packet.getNumber() << "(expected: " << packet_number << ")" << endl;
-            //codebender->tftp_notify("ACK for packet " + received_packet.getNumber());
-
             return true;
-
         }
-
-        //	cout << "Unhandled packet" << endl;
-
-    } else {
-        //	codebender->tftp_notify("Received other");
-        cout << "Received other packet size:" << received_packet.getSize() << "[";
-        for (int i = 0; i < received_packet.getSize(); i++) {
-
-            unsigned char chr = received_packet.getByte(i);
-            cout << chr;
-        }
-        cout << "]" << endl;
     }
-
     return true;
 
 }
 
-int TFTPClient::waitForPacketData(int packet_number, int timeout_ms) {
+template<class Caller_P> int TFTPClient<Caller_P>::waitForPacketData(int packet_number, int timeout_ms) {
 
     int wait_status = waitForPacket(&received_packet, timeout_ms);
 
@@ -332,57 +336,35 @@ int TFTPClient::waitForPacketData(int packet_number, int timeout_ms) {
 
 }
 
-int TFTPClient::sendFile(char* filename, char* destination) {
+template<class Caller_P> int TFTPClient<Caller_P>::sendFile(char* filename, char* destination) {
 
     TFTP_Packet packet_wrq, packet_data;
     ifstream file(filename, ifstream::binary);
     char memblock[TFTP_PACKET_DATA_SIZE];
 
     if (!file.is_open() || !file.good()) {
-
-        //codebender->tftp_notify("Unable to open file.");
-
         return 1;
-
     }
-    //codebender->tftp_notify("Read File.");
-
-
     packet_wrq.createWRQ(destination);
     packet_wrq.dumpData();
 
     int last_packet_no = 0;
 
-    //    cout << "Send wrq" << endl;
-
-    //	int last_error = 0;
     sendPacket(&packet_wrq);
     while (true) {
-        //	cout << "Waiting for ack" << endl;
-
         if (waitForPacketACK(last_packet_no++, TFTP_CLIENT_SERVER_TIMEOUT)) {
-
-            //	    cout << "Reading..." << endl;
             file.read(memblock, TFTP_PACKET_DATA_SIZE);
 
             packet_data.createData(last_packet_no, (char*) memblock, file.gcount());
-            //            char messageString[64] = "Sending packet ";
-            //            char integer_string[32];
-            //            sprintf(integer_string, "%d", last_packet_no);
-            //            string message("Sending packet ");
-            //            string s = boost::lexical_cast<string>(last_packet_no);
-            //            message += s;
-            //            codebender->tftp_notify("Sending packets. ");
+
+            caller_->tftp_notify(last_packet_no);
 
             sendPacket(&packet_data);
-            //	    usleep(500000);
-            //	    sendPacket(&packet_data);
+
             if (file.eof()) {
                 break;
             }
         } else {
-
-            //codebender->tftp_notify("Server has timed out "+ last_packet_no);
             file.close();
             return 2;
 
@@ -397,12 +379,9 @@ int TFTPClient::sendFile(char* filename, char* destination) {
 
 }
 
-void TFTPClient::errorReceived(TFTP_Packet* packet) {
+template<class Caller_P> void TFTPClient<Caller_P>::errorReceived(TFTP_Packet* packet) {
 
     int error_code = packet->getWord(2);
-
-    //    cout << "Error! Error code: " << error_code << endl;
-    //    cout << "Error message: ";
 
     switch (error_code) {
         case 1: cout << TFTP_ERROR_1;
@@ -428,7 +407,7 @@ void TFTPClient::errorReceived(TFTP_Packet* packet) {
 
 }
 
-TFTPClient::~TFTPClient() {
+template<class Caller_P> TFTPClient<Caller_P>::~TFTPClient() {
 
     if (socket_descriptor != -1) {
         disconnect();
@@ -436,7 +415,7 @@ TFTPClient::~TFTPClient() {
 
 }
 
-void TFTPClient::disconnect() {
+template<class Caller_P> void TFTPClient<Caller_P>::disconnect() {
 #if defined _WIN32 || _WIN64
 
     closesocket(socket_descriptor);
@@ -448,4 +427,4 @@ void TFTPClient::disconnect() {
 
 #endif
 }
-//#endif
+#endif

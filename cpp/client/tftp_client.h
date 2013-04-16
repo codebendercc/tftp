@@ -31,8 +31,6 @@
 
 #endif
 
-
-
 #define TFTP_ERROR_0 "Not defined, see error message (if any)"
 #define TFTP_ERROR_1 "File not found"
 #define TFTP_ERROR_2 "Access violation"
@@ -53,9 +51,11 @@
 #define TFTP_CLIENT_ERROR_NO_ERROR 4
 #define TFTP_CLIENT_ERROR_PACKET_UNEXPECTED 5
 
+template<class Caller_P>
 class TFTPClient {
 private:
 
+    typedef Caller_P Caller;
     const char* server_ip;
     int server_port;
 
@@ -67,6 +67,7 @@ private:
     int connection;
 
     TFTP_Packet received_packet;
+    Caller* caller_;
 
 protected:
 
@@ -75,13 +76,18 @@ protected:
 
 public:
 
-    TFTPClient(char* ip, int port);
+    TFTPClient(const char* ip, int port, Caller* caller_);
+    TFTPClient(const char* ip, int port);
     ~TFTPClient();
 
     int connectToServer(int port = 69);
     bool getFile(char* filename, char* destination);
     int sendFile(char* filename, char* destination);
     void disconnect();
+
+    int packetSize() {
+        return TFTP_PACKET_DATA_SIZE;
+    }
 
     int waitForPacket(TFTP_Packet* packet, int timeout_ms = TFTP_CLIENT_SERVER_TIMEOUT);
     bool waitForPacketACK(int packet_number, int timeout_ms = TFTP_CLIENT_SERVER_TIMEOUT);
@@ -105,6 +111,5 @@ class ETFTPSocketInitialize : public std::exception {
     }
 };
 
-void DEBUGMSG(char*);
-
+#include "tftp_client.cpp"
 #endif
