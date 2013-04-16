@@ -1,6 +1,8 @@
 #ifndef TFTP_PACKET
 #define TFTP_PACKET
 
+#include <string.h>
+
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
 
