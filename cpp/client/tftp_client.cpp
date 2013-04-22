@@ -1,8 +1,6 @@
 #ifndef TFTP_PACKET_CPP
 #define TFTP_PACKET_CPP
 
-#include "tftp_packet.h"
-#include "tftp_client.h"
 
 using namespace std;
 
